@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brainstem Inventory Finder</title>
+  <style>
+    :root {
+      --bg: #0b57d0;
+      --card: #ffffff;
+      --text: #10233f;
+      --muted: #5b6b82;
+      --border: #dbe4f0;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 16px;
+    }
+
+    .wrap {
+      width: 100%;
+      max-width: 760px;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.18);
+    }
+
+    .logo {
+      display: block;
+      width: min(260px, 70%);
+      margin: 0 auto 18px;
+      border-radius: 16px;
+      background: #f4f4f4;
+    }
+    .header {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+    }
+
+    .rice-logo {
+      height: 120px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      text-align: center;
+      font-size: 2rem;
+    }
+
+    p.sub {
+      text-align: center;
+      color: var(--muted);
+      margin: 0 0 28px;
+      line-height: 1.5;
+    }
+
+    label {
+      display: block;
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    select {
+      width: 100%;
+      font-size: 1rem;
+      padding: 14px 16px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: white;
+      outline: none;
+    }
+
+    select:focus {
+      border-color: #6aa4ff;
+      box-shadow: 0 0 0 4px rgba(11, 87, 208, 0.14);
+    }
+
+    .result {
+      margin-top: 22px;
+      padding: 18px;
+      border-radius: 18px;
+      background: #f7faff;
+      border: 1px solid var(--border);
+      display: none;
+    }
+
+    .result h2 {
+      margin: 0 0 12px;
+      font-size: 1.2rem;
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 10px 0;
+      border-top: 1px solid #e9eef5;
+    }
+
+    .row:first-of-type { border-top: none; }
+
+    .key {
+      font-weight: 700;
+    }
+
+    .value {
+      text-align: right;
+    }
+
+    .status {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 0.95rem;
+      text-align: center;
+    }
+
+    .error {
+      color: #9b1c1c;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <img class="logo" src="brainstem-logo.png" alt="Brainstem logo" />
+      <h1>Brainstem Inventory Finder</h1>
+      <p class="sub">Choose an item to see its quantity and storage section.</p>
+
+      <label for="itemSelect">What are you looking for?</label>
+      <select id="itemSelect" disabled>
+        <option>Loading items...</option>
+      </select>
+
+      <div class="result" id="resultBox">
+        <h2 id="itemName">Selected item</h2>
+        <div class="row">
+          <div class="key">Quantity</div>
+          <div class="value" id="quantityValue"></div>
+        </div>
+        <div class="row">
+          <div class="key">Location</div>
+          <div class="value" id="locationValue"></div>
+        </div>
+      </div>
+
+      <div class="status" id="status">Waiting for Google Sheet data...</div>
+    </div>
+  </div>
+  
+
+  <script>
+    // Replace this with your Google Sheets published CSV link.
+    // Example format:
+    // https://docs.google.com/spreadsheets/d/e/XXXXX/pub?gid=0&single=true&output=csv
+    const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTHvnOs2lp6RqpY1sOxZS7pnh2IbWH4EKUUhybj2lylBvzN-qqWMrBP9ZSItl_vA6_jygwVYfasPzCD/pub?gid=0&single=true&output=csv";
+
+    const itemSelect = document.getElementById("itemSelect");
+    const resultBox = document.getElementById("resultBox");
+    const itemName = document.getElementById("itemName");
+    const quantityValue = document.getElementById("quantityValue");
+    const locationValue = document.getElementById("locationValue");
+    const statusEl = document.getElementById("status");
+
+    let inventory = [];
+
+    function parseCSVLine(line) {
+      const values = [];
+      let current = "";
+      let inQuotes = false;
+
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const next = line[i + 1];
+
+        if (char === '"') {
+          if (inQuotes && next === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          values.push(current);
+          current = "";
+        } else {
+          current += char;
+        }
+      }
+
+      values.push(current);
+      return values.map(v => v.trim());
+    }
+
+    function isSectionMarker(text) {
+  return /^[A-Z]\d+$/.test(text.trim());
+    }
+
+    function toDisplayQuantity(value) {
+      if (value === undefined || value === null || value === "") {
+        return "Not listed";
+      }
+      return value;
+    }
+
+    function buildInventory(rows) {
+      const items = [];
+      let currentSection = "Unknown";
+
+      for (const row of rows) {
+        const rawName = (row[0] || "").trim();
+        const rawQuantity = (row[1] || "").trim();
+
+        if (!rawName) continue;
+
+        if (isSectionMarker(rawName)) {
+          currentSection = rawName.toUpperCase();
+          continue;
+        }
+
+        if (rawName.toLowerCase() === "quantity (if applicable)") continue;
+
+        items.push({
+          name: rawName,
+          quantity: rawQuantity,
+          location: currentSection
+        });
+      }
+
+      return items;
+    }
+
+    function populateDropdown(items) {
+      itemSelect.innerHTML = "<option value=''>Select an item</option>";
+
+      // Sort all items alphabetically regardless of section
+      const sorted = [...items].sort((a, b) => a.name.localeCompare(b.name));
+
+      sorted.forEach(item => {
+        const option = document.createElement("option");
+        option.value = item.name;
+        option.textContent = item.name;
+        itemSelect.appendChild(option);
+      });
+
+      itemSelect.disabled = false;
+    }
+
+    function showItem(selectedName) {
+      const match = inventory.find(item => item.name === selectedName);
+
+      if (!match) {
+        resultBox.style.display = "none";
+        return;
+      }
+
+      itemName.textContent = match.name;
+      quantityValue.textContent = toDisplayQuantity(match.quantity);
+      locationValue.textContent = match.location;
+      resultBox.style.display = "block";
+    }
+
+    async function loadSheet() {
+      if (!SHEET_CSV_URL || SHEET_CSV_URL.includes("PASTE_YOUR_PUBLISHED_CSV_URL_HERE")) {
+        statusEl.innerHTML = "<span class='error'>Add your Google Sheets published CSV link in the code first.</span>";
+        return;
+      }
+
+      try {
+        statusEl.textContent = "Loading inventory...";
+        const response = await fetch(SHEET_CSV_URL);
+        if (!response.ok) throw new Error("Could not fetch sheet data.");
+
+        const csvText = await response.text();
+        const rows = csvText
+          .split(/\r?\n/)
+          .filter(line => line.trim() !== "")
+          .map(parseCSVLine);
+
+        inventory = buildInventory(rows);
+        populateDropdown(inventory);
+        statusEl.textContent = `${inventory.length} items loaded.`;
+      } catch (error) {
+        console.error(error);
+        statusEl.innerHTML = "<span class='error'>Could not load the Google Sheet. Make sure it is published to the web as CSV.</span>";
+      }
+    }
+
+    itemSelect.addEventListener("change", (e) => {
+      showItem(e.target.value);
+    });
+
+    loadSheet();
+  </script>
+</body>
+</html>
