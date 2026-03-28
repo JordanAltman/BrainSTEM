@@ -147,6 +147,20 @@
       <select id="itemSelect" disabled>
         <option>Loading items...</option>
       </select>
+      <div style="margin-top: 20px;">
+  <label>Action</label>
+  <div style="display: flex; gap: 10px;">
+    <button id="depositBtn">Deposit</button>
+    <button id="withdrawBtn">Withdraw</button>
+  </div>
+
+  <label style="margin-top: 15px;">Quantity</label>
+  <input id="quantityInput" type="number" placeholder="Enter amount (optional)" style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #dbe4f0;" />
+
+  <button id="submitBtn" style="margin-top: 15px; width: 100%; padding: 14px; border-radius: 12px; background: #0b57d0; color: white; border: none; font-weight: bold;">
+    Submit
+  </button>
+</div>
 
       <div class="result" id="resultBox">
         <h2 id="itemName">Selected item</h2>
@@ -307,6 +321,62 @@
     });
 
     loadSheet();
+
+    let selectedAction = null;
+
+const depositBtn = document.getElementById("depositBtn");
+const withdrawBtn = document.getElementById("withdrawBtn");
+const quantityInput = document.getElementById("quantityInput");
+const submitBtn = document.getElementById("submitBtn");
+
+depositBtn.onclick = () => {
+  selectedAction = "Deposit";
+  depositBtn.style.background = "#0b57d0";
+  depositBtn.style.color = "white";
+  withdrawBtn.style.background = "";
+  withdrawBtn.style.color = "";
+};
+
+withdrawBtn.onclick = () => {
+  selectedAction = "Withdraw";
+  withdrawBtn.style.background = "#0b57d0";
+  withdrawBtn.style.color = "white";
+  depositBtn.style.background = "";
+  depositBtn.style.color = "";
+};
+
+submitBtn.onclick = async () => {
+  const item = itemSelect.value;
+  const quantity = quantityInput.value;
+
+  if (!item || !selectedAction) {
+    alert("Select item and action.");
+    return;
+  }
+
+  if (!quantity) {
+    alert("No quantity entered — nothing done.");
+    return;
+  }
+
+  console.log({
+    item,
+    action: selectedAction,
+    quantity
+  });
+
+  alert("Submitted!");
+
+  // reset quantity
+  quantityInput.value = "";
+
+  // ✅ reset action buttons HERE
+  selectedAction = null;
+  depositBtn.style.background = "";
+  depositBtn.style.color = "";
+  withdrawBtn.style.background = "";
+  withdrawBtn.style.color = "";
+};
   </script>
 </body>
 </html>
