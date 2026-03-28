@@ -224,29 +224,40 @@
     return response.json();
   }
 
-  async function loadItems() {
-    statusEl.textContent = "Loading inventory...";
+ async function loadItems() {
+  statusEl.textContent = "Loading inventory...";
 
-    try {
-      const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(ITEMS_TABLE)}`;
+  try {
+    let allRecords = [];
+    let offset = null;
+
+    do {
+      let url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(ITEMS_TABLE)}`;
+      if (offset) {
+        url += `?offset=${encodeURIComponent(offset)}`;
+      }
+
       const data = await airtableRequest(url);
+      allRecords = allRecords.concat(data.records);
+      offset = data.offset || null;
+    } while (offset);
 
-      inventory = data.records
-        .map(record => ({
-          recordId: record.id,
-          name: record.fields["Name"],
-          quantity: record.fields["Quantity"],
-          location: record.fields["Location"] || "Not listed"
-        }))
-        .filter(item => item.name);
+    inventory = allRecords
+      .map(record => ({
+        recordId: record.id,
+        name: record.fields["Name"],
+        quantity: record.fields["Quantity"],
+        location: record.fields["Location"] || "Not listed"
+      }))
+      .filter(item => item.name);
 
-      populateDropdown(inventory);
-      statusEl.textContent = `${inventory.length} items loaded.`;
-    } catch (error) {
-      console.error(error);
-      statusEl.textContent = "Could not load Airtable data.";
-    }
+    populateDropdown(inventory);
+    statusEl.textContent = `${inventory.length} items loaded.`;
+  } catch (error) {
+    console.error(error);
+    statusEl.textContent = "Could not load Airtable data.";
   }
+}
 
   function populateDropdown(items) {
     itemSelect.innerHTML = "<option value=''>Select an item</option>";
