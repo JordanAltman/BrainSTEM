@@ -334,18 +334,20 @@
     try {
       const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(ITEMS_TABLE)}/${selectedRecordId}`;
 
-      await airtableRequest(url, {
-        method: "PATCH",
-        body: JSON.stringify({
-          fields: {
-            "Quantity": newQty
-          }
-        })
-      });
+      const updated = await airtableRequest(url, {
+  method: "PATCH",
+  body: JSON.stringify({
+    fields: {
+      "Quantity": newQty
+    }
+  })
+});
 
-      selectedItem.quantity = newQty;
-      quantityValue.textContent = newQty;
-      statusEl.textContent = "Updated successfully.";
+console.log("Updated record:", updated);
+
+selectedItem.quantity = updated.fields["Quantity"];
+quantityValue.textContent = updated.fields["Quantity"];
+statusEl.textContent = "Updated successfully.";
 
       quantityInput.value = "";
       selectedAction = null;
@@ -354,10 +356,10 @@
       withdrawBtn.style.background = "";
       withdrawBtn.style.color = "";
     } catch (error) {
-      console.error(error);
-      statusEl.textContent = "Update failed.";
-      alert("Error updating Airtable.");
-    }
+  console.error(error);
+  statusEl.textContent = "Update failed.";
+  alert(error.message);
+}
   };
 
   loadItems();
