@@ -235,7 +235,7 @@
         .map(record => ({
           recordId: record.id,
           name: record.fields["Name"],
-          quantity: record.fields["Notes"],
+          quantity: record.fields["Quantity"],
           location: record.fields["Location"] || "Not listed"
         }))
         .filter(item => item.name);
@@ -338,7 +338,7 @@
         method: "PATCH",
         body: JSON.stringify({
           fields: {
-            "Notes": newQty
+            "Quantity": newQty
           }
         })
       });
