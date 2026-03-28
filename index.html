@@ -147,17 +147,17 @@
       <select id="itemSelect" disabled>
         <option>Loading items...</option>
       </select>
-      <div style="margin-top: 20px;">
+     <div style="margin-top: 20px;">
   <label>Action</label>
   <div style="display: flex; gap: 10px;">
-    <button id="depositBtn">Deposit</button>
-    <button id="withdrawBtn">Withdraw</button>
+    <button type="button" id="depositBtn">Deposit</button>
+    <button type="button" id="withdrawBtn">Withdraw</button>
   </div>
 
   <label style="margin-top: 15px;">Quantity</label>
   <input id="quantityInput" type="number" placeholder="Enter amount (optional)" style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #dbe4f0;" />
 
-  <button id="submitBtn" style="margin-top: 15px; width: 100%; padding: 14px; border-radius: 12px; background: #0b57d0; color: white; border: none; font-weight: bold;">
+  <button type="button" id="submitBtn" style="margin-top: 15px; width: 100%; padding: 14px; border-radius: 12px; background: #0b57d0; color: white; border: none; font-weight: bold;">
     Submit
   </button>
 </div>
@@ -174,209 +174,193 @@
         </div>
       </div>
 
-      <div class="status" id="status">Waiting for Google Sheet data...</div>
+      <div class="status" id="status">Waiting for Airtable data...</div>
     </div>
   </div>
   
 
-  <script>
-    // Replace this with your Google Sheets published CSV link.
-    // Example format:
-    // https://docs.google.com/spreadsheets/d/e/XXXXX/pub?gid=0&single=true&output=csv
-    const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTHvnOs2lp6RqpY1sOxZS7pnh2IbWH4EKUUhybj2lylBvzN-qqWMrBP9ZSItl_vA6_jygwVYfasPzCD/pub?gid=0&single=true&output=csv";
+ <script>
+  const AIRTABLE_PAT = "patAEpJ3NzNOwDvWz.4ae6454e369898b4d2842766f24118e4cfcc2469cd0d40004341ab5f7eb48411";
+  const AIRTABLE_BASE_ID = "appRiqPFAkp8uzGt7";
+  const ITEMS_TABLE = "Table 1";
 
-    const itemSelect = document.getElementById("itemSelect");
-    const resultBox = document.getElementById("resultBox");
-    const itemName = document.getElementById("itemName");
-    const quantityValue = document.getElementById("quantityValue");
-    const locationValue = document.getElementById("locationValue");
-    const statusEl = document.getElementById("status");
+  const itemSelect = document.getElementById("itemSelect");
+  const resultBox = document.getElementById("resultBox");
+  const itemName = document.getElementById("itemName");
+  const quantityValue = document.getElementById("quantityValue");
+  const locationValue = document.getElementById("locationValue");
+  const statusEl = document.getElementById("status");
 
-    let inventory = [];
+  const depositBtn = document.getElementById("depositBtn");
+  const withdrawBtn = document.getElementById("withdrawBtn");
+  const quantityInput = document.getElementById("quantityInput");
+  const submitBtn = document.getElementById("submitBtn");
 
-    function parseCSVLine(line) {
-      const values = [];
-      let current = "";
-      let inQuotes = false;
+  let inventory = [];
+  let selectedAction = null;
 
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        const next = line[i + 1];
+  function toDisplayQuantity(value) {
+    if (value === undefined || value === null || value === "") {
+      return "Not listed";
+    }
+    return value;
+  }
 
-        if (char === '"') {
-          if (inQuotes && next === '"') {
-            current += '"';
-            i++;
-          } else {
-            inQuotes = !inQuotes;
-          }
-        } else if (char === ',' && !inQuotes) {
-          values.push(current);
-          current = "";
-        } else {
-          current += char;
-        }
+  async function airtableRequest(url, options = {}) {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${AIRTABLE_PAT}`,
+        "Content-Type": "application/json",
+        ...(options.headers || {})
       }
-
-      values.push(current);
-      return values.map(v => v.trim());
-    }
-
-    function isSectionMarker(text) {
-  return /^[A-Z]\d+$/.test(text.trim());
-    }
-
-    function toDisplayQuantity(value) {
-      if (value === undefined || value === null || value === "") {
-        return "Not listed";
-      }
-      return value;
-    }
-
-    function buildInventory(rows) {
-      const items = [];
-      let currentSection = "Unknown";
-
-      for (const row of rows) {
-        const rawName = (row[0] || "").trim();
-        const rawQuantity = (row[1] || "").trim();
-
-        if (!rawName) continue;
-
-        if (isSectionMarker(rawName)) {
-          currentSection = rawName.toUpperCase();
-          continue;
-        }
-
-        if (rawName.toLowerCase() === "quantity (if applicable)") continue;
-
-        items.push({
-          name: rawName,
-          quantity: rawQuantity,
-          location: currentSection
-        });
-      }
-
-      return items;
-    }
-
-    function populateDropdown(items) {
-      itemSelect.innerHTML = "<option value=''>Select an item</option>";
-
-      // Sort all items alphabetically regardless of section
-      const sorted = [...items].sort((a, b) => a.name.localeCompare(b.name));
-
-      sorted.forEach(item => {
-        const option = document.createElement("option");
-        option.value = item.name;
-        option.textContent = item.name;
-        itemSelect.appendChild(option);
-      });
-
-      itemSelect.disabled = false;
-    }
-
-    function showItem(selectedName) {
-      const match = inventory.find(item => item.name === selectedName);
-
-      if (!match) {
-        resultBox.style.display = "none";
-        return;
-      }
-
-      itemName.textContent = match.name;
-      quantityValue.textContent = toDisplayQuantity(match.quantity);
-      locationValue.textContent = match.location;
-      resultBox.style.display = "block";
-    }
-
-    async function loadSheet() {
-      if (!SHEET_CSV_URL || SHEET_CSV_URL.includes("PASTE_YOUR_PUBLISHED_CSV_URL_HERE")) {
-        statusEl.innerHTML = "<span class='error'>Add your Google Sheets published CSV link in the code first.</span>";
-        return;
-      }
-
-      try {
-        statusEl.textContent = "Loading inventory...";
-        const response = await fetch(SHEET_CSV_URL);
-        if (!response.ok) throw new Error("Could not fetch sheet data.");
-
-        const csvText = await response.text();
-        const rows = csvText
-          .split(/\r?\n/)
-          .filter(line => line.trim() !== "")
-          .map(parseCSVLine);
-
-        inventory = buildInventory(rows);
-        populateDropdown(inventory);
-        statusEl.textContent = `${inventory.length} items loaded.`;
-      } catch (error) {
-        console.error(error);
-        statusEl.innerHTML = "<span class='error'>Could not load the Google Sheet. Make sure it is published to the web as CSV.</span>";
-      }
-    }
-
-    itemSelect.addEventListener("change", (e) => {
-      showItem(e.target.value);
     });
 
-    loadSheet();
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Airtable error ${response.status}: ${errorText}`);
+    }
 
-    let selectedAction = null;
-
-const depositBtn = document.getElementById("depositBtn");
-const withdrawBtn = document.getElementById("withdrawBtn");
-const quantityInput = document.getElementById("quantityInput");
-const submitBtn = document.getElementById("submitBtn");
-
-depositBtn.onclick = () => {
-  selectedAction = "Deposit";
-  depositBtn.style.background = "#0b57d0";
-  depositBtn.style.color = "white";
-  withdrawBtn.style.background = "";
-  withdrawBtn.style.color = "";
-};
-
-withdrawBtn.onclick = () => {
-  selectedAction = "Withdraw";
-  withdrawBtn.style.background = "#0b57d0";
-  withdrawBtn.style.color = "white";
-  depositBtn.style.background = "";
-  depositBtn.style.color = "";
-};
-
-submitBtn.onclick = async () => {
-  const item = itemSelect.value;
-  const quantity = quantityInput.value;
-
-  if (!item || !selectedAction) {
-    alert("Select item and action.");
-    return;
+    return response.json();
   }
 
-  if (!quantity) {
-    alert("No quantity entered — nothing done.");
-    return;
+  async function loadItems() {
+    statusEl.textContent = "Loading inventory...";
+
+    try {
+      const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(ITEMS_TABLE)}`;
+      const data = await airtableRequest(url);
+
+      inventory = data.records
+        .map(record => ({
+          recordId: record.id,
+          name: record.fields["Name"],
+          quantity: record.fields["Notes"],
+          location: record.fields["Location"] || "Not listed"
+        }))
+        .filter(item => item.name);
+
+      populateDropdown(inventory);
+      statusEl.textContent = `${inventory.length} items loaded.`;
+    } catch (error) {
+      console.error(error);
+      statusEl.textContent = "Could not load Airtable data.";
+    }
   }
 
-  console.log({
-    item,
-    action: selectedAction,
-    quantity
+  function populateDropdown(items) {
+    itemSelect.innerHTML = "<option value=''>Select an item</option>";
+
+    const sorted = [...items].sort((a, b) => a.name.localeCompare(b.name));
+
+    sorted.forEach(item => {
+      const option = document.createElement("option");
+      option.value = item.recordId;
+      option.textContent = item.name;
+      itemSelect.appendChild(option);
+    });
+
+    itemSelect.disabled = false;
+  }
+
+  function showItem(selectedRecordId) {
+    const match = inventory.find(item => item.recordId === selectedRecordId);
+
+    if (!match) {
+      resultBox.style.display = "none";
+      return;
+    }
+
+    itemName.textContent = match.name;
+    quantityValue.textContent = toDisplayQuantity(match.quantity);
+    locationValue.textContent = match.location;
+    resultBox.style.display = "block";
+  }
+
+  itemSelect.addEventListener("change", (e) => {
+    showItem(e.target.value);
   });
 
-  alert("Submitted!");
+  depositBtn.onclick = () => {
+    selectedAction = "Deposit";
+    depositBtn.style.background = "#0b57d0";
+    depositBtn.style.color = "white";
+    withdrawBtn.style.background = "";
+    withdrawBtn.style.color = "";
+  };
 
-  // reset quantity
-  quantityInput.value = "";
+  withdrawBtn.onclick = () => {
+    selectedAction = "Withdraw";
+    withdrawBtn.style.background = "#0b57d0";
+    withdrawBtn.style.color = "white";
+    depositBtn.style.background = "";
+    depositBtn.style.color = "";
+  };
 
-  // ✅ reset action buttons HERE
-  selectedAction = null;
-  depositBtn.style.background = "";
-  depositBtn.style.color = "";
-  withdrawBtn.style.background = "";
-  withdrawBtn.style.color = "";
-};
-  </script>
+  submitBtn.onclick = async () => {
+    const selectedRecordId = itemSelect.value;
+    const quantity = Number(quantityInput.value);
+
+    if (!selectedRecordId || !selectedAction) {
+      alert("Select item and action.");
+      return;
+    }
+
+    if (!quantity) {
+      alert("No quantity entered — nothing done.");
+      return;
+    }
+
+    const selectedItem = inventory.find(item => item.recordId === selectedRecordId);
+
+    if (!selectedItem) {
+      alert("Item not found.");
+      return;
+    }
+
+    const currentQty = Number(selectedItem.quantity) || 0;
+    const newQty =
+      selectedAction === "Deposit"
+        ? currentQty + quantity
+        : currentQty - quantity;
+
+    if (newQty < 0) {
+      alert("Cannot go below 0.");
+      return;
+    }
+
+    statusEl.textContent = "Updating inventory...";
+
+    try {
+      const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(ITEMS_TABLE)}/${selectedRecordId}`;
+
+      await airtableRequest(url, {
+        method: "PATCH",
+        body: JSON.stringify({
+          fields: {
+            "Notes": newQty
+          }
+        })
+      });
+
+      selectedItem.quantity = newQty;
+      quantityValue.textContent = newQty;
+      statusEl.textContent = "Updated successfully.";
+
+      quantityInput.value = "";
+      selectedAction = null;
+      depositBtn.style.background = "";
+      depositBtn.style.color = "";
+      withdrawBtn.style.background = "";
+      withdrawBtn.style.color = "";
+    } catch (error) {
+      console.error(error);
+      statusEl.textContent = "Update failed.";
+      alert("Error updating Airtable.");
+    }
+  };
+
+  loadItems();
+</script>
 </body>
 </html>
